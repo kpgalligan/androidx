@@ -2021,7 +2021,12 @@ class CompositionTests {
         expectChanges()
     }
 
-    @Test // b/154650546
+    @Test
+    fun testFail() {
+        assertFalse(true)
+    }
+
+//    @Test // b/154650546
     fun testInsertOnMultipleLevels() = compositionTest {
         val items = mutableListOf(
             1 to mutableListOf(

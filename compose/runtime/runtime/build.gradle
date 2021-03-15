@@ -69,6 +69,8 @@ if(AndroidXUiPlugin.isMultiplatformEnabled(project)) {
             browser()
         }
 
+        macosX64()
+
         /*
          * When updating dependencies, make sure to make the an an analogous update in the
          * corresponding block above
@@ -76,12 +78,20 @@ if(AndroidXUiPlugin.isMultiplatformEnabled(project)) {
         sourceSets {
             commonMain.dependencies {
                 implementation(KOTLIN_STDLIB_COMMON)
-                implementation(KOTLIN_COROUTINES_CORE)
+                implementation(KOTLIN_COROUTINES_CORE_NATIVE_MT) /*{
+                    version {
+                        strictly("1.4.1-native-mt")
+                    }
+                }*/
                 implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.3.3")
             }
             jvmMain.dependencies {
                 implementation(KOTLIN_STDLIB)
                 api(KOTLIN_COROUTINES_CORE)
+            }
+            macosX64Main.dependencies {
+//                implementation(KOTLIN_STDLIB)
+//                api(KOTLIN_COROUTINES_CORE)
             }
             androidMain {
                 dependencies {
@@ -96,6 +106,7 @@ if(AndroidXUiPlugin.isMultiplatformEnabled(project)) {
             jsMain {
                 dependencies {
                     implementation(kotlin("stdlib-js"))
+                    implementation(KOTLIN_COROUTINES_JS)
                 }
             }
             jvmTest.dependencies {
