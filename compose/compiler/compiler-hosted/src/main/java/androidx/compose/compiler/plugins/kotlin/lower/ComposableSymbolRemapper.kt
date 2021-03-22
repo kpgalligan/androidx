@@ -16,17 +16,21 @@
 
 package androidx.compose.compiler.plugins.kotlin.lower
 
+import androidx.compose.compiler.plugins.kotlin.hasComposableAnnotation
 import org.jetbrains.kotlin.descriptors.ClassConstructorDescriptor
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.descriptors.ParameterDescriptor
 import org.jetbrains.kotlin.descriptors.PropertyGetterDescriptor
 import org.jetbrains.kotlin.descriptors.PropertySetterDescriptor
+import org.jetbrains.kotlin.descriptors.ReceiverParameterDescriptor
 import org.jetbrains.kotlin.descriptors.SourceElement
 import org.jetbrains.kotlin.descriptors.TypeParameterDescriptor
+import org.jetbrains.kotlin.descriptors.ValueParameterDescriptor
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.ObsoleteDescriptorBasedAPI
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
+import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrTypeParameter
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
@@ -43,6 +47,8 @@ import org.jetbrains.kotlin.ir.util.DeepCopySymbolRemapper
 import org.jetbrains.kotlin.ir.util.DescriptorsRemapper
 import org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
+import org.jetbrains.kotlin.resolve.descriptorUtil.parents
+import org.jetbrains.kotlin.types.KotlinType
 
 /**
  * This symbol remapper is aware of possible wrapped descriptor ownership change to align
@@ -81,7 +87,7 @@ class ComposableSymbolRemapper : DeepCopySymbolRemapper(
         override fun remapDeclaredSimpleFunction(
             descriptor: FunctionDescriptor
         ): FunctionDescriptor =
-            if (descriptor is WrappedSimpleFunctionDescriptor) {
+            if (descriptor is WrappedSimpleFunctionDescriptor || descriptor.shouldBeRemapped()) {
                 when (descriptor) {
                     is PropertyGetterDescriptor -> WrappedPropertyGetterDescriptor()
                     is PropertySetterDescriptor -> WrappedPropertySetterDescriptor()
@@ -96,27 +102,43 @@ class ComposableSymbolRemapper : DeepCopySymbolRemapper(
 
         override fun remapDeclaredValueParameter(
             descriptor: ParameterDescriptor
-        ): ParameterDescriptor =
-            when (descriptor) {
-                is WrappedValueParameterDescriptor -> {
-                    WrappedValueParameterDescriptor()
+        ): ParameterDescriptor {
+            val parent = descriptor.containingDeclaration
+            return if (
+                descriptor is WrappedDeclarationDescriptor<*>
+                    || (parent is FunctionDescriptor && parent.shouldBeRemapped())
+            ) {
+                when (descriptor) {
+                    is ValueParameterDescriptor -> WrappedValueParameterDescriptor()
+                    is ReceiverParameterDescriptor -> WrappedReceiverParameterDescriptor()
+                    else -> super.remapDeclaredValueParameter(descriptor)
                 }
-                is WrappedReceiverParameterDescriptor -> {
-                    WrappedReceiverParameterDescriptor()
-                }
-                else -> {
-                    super.remapDeclaredValueParameter(descriptor)
-                }
+            } else {
+                super.remapDeclaredValueParameter(descriptor)
             }
+        }
 
         override fun remapDeclaredTypeParameter(
             descriptor: TypeParameterDescriptor
-        ): TypeParameterDescriptor =
-            if (descriptor is WrappedTypeParameterDescriptor) {
+        ): TypeParameterDescriptor {
+            val parent = descriptor.containingDeclaration
+            return if (
+                descriptor is WrappedTypeParameterDescriptor
+                    || (parent is FunctionDescriptor && parent.shouldBeRemapped())
+            ) {
                 WrappedTypeParameterDescriptor()
             } else {
                 super.remapDeclaredTypeParameter(descriptor)
             }
+        }
+
+        private fun FunctionDescriptor.shouldBeRemapped() =
+            valueParameters.any { it.type.shouldBeRemapped() }
+                || returnType?.shouldBeRemapped() == true
+
+        private fun KotlinType.shouldBeRemapped() =
+            hasComposableAnnotation()
+                || arguments.any { it.type.hasComposableAnnotation() }
     }
 )
 

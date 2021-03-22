@@ -151,7 +151,7 @@ class AndroidXUiPlugin : Plugin<Project> {
                 configureForMultiplatform()
             }
 
-            tasks.withType(KotlinCompile::class.java).configureEach { compile ->
+            tasks.withType(KotlinJvmCompile::class.java).configureEach { compile ->
                 // Needed to enable `expect` and `actual` keywords
                 compile.kotlinOptions.freeCompilerArgs += "-Xmulti-platform"
             }

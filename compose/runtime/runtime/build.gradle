@@ -31,6 +31,7 @@ AndroidXUiPlugin.applyAndConfigureKotlinPlugin(project)
 
 dependencies {
     kotlinPlugin(project(":compose:compiler:compiler"))
+    kotlinNativeCompilerPluginClasspath(project(":compose:compiler:compiler-hosted"))
 
     if(!AndroidXUiPlugin.isMultiplatformEnabled(project)) {
         /*
@@ -68,6 +69,7 @@ if(AndroidXUiPlugin.isMultiplatformEnabled(project)) {
         js(IR) {
             browser()
         }
+        macosX64("macOS")
 
         /*
          * When updating dependencies, make sure to make the an an analogous update in the

@@ -169,8 +169,7 @@ inline fun <reified T : IrElement> T.copyWithNewTypeParams(source: IrFunction, t
     return deepCopyWithSymbols(target) { symbolRemapper, typeRemapper ->
         val typeParamRemapper = object : TypeRemapper by typeRemapper {
             override fun remapType(type: IrType): IrType {
-                return typeRemapper.remapType(type)
-                    .remapTypeParameters(source, target)
+                return typeRemapper.remapType(type.remapTypeParameters(source, target))
             }
         }
 

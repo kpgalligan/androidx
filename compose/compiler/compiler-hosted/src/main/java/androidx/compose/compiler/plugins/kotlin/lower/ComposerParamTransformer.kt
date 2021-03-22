@@ -21,9 +21,14 @@ import androidx.compose.compiler.plugins.kotlin.analysis.ComposeWritableSlices
 import androidx.compose.compiler.plugins.kotlin.hasComposableAnnotation
 import androidx.compose.compiler.plugins.kotlin.irTrace
 import androidx.compose.compiler.plugins.kotlin.isComposableCallable
+import androidx.compose.compiler.plugins.kotlin.lower.decoys.copyWithNewTypeParams
 import androidx.compose.compiler.plugins.kotlin.lower.decoys.isDecoy
 import org.jetbrains.kotlin.backend.common.extensions.IrPluginContext
 import org.jetbrains.kotlin.backend.common.ir.copyTo
+import org.jetbrains.kotlin.backend.common.ir.copyTypeParameters
+import org.jetbrains.kotlin.backend.common.ir.copyTypeParametersFrom
+import org.jetbrains.kotlin.backend.common.ir.moveBodyTo
+import org.jetbrains.kotlin.backend.common.ir.remapTypeParameters
 import org.jetbrains.kotlin.backend.jvm.ir.isInlineParameter
 import org.jetbrains.kotlin.backend.jvm.lower.inlineclasses.InlineClassAbi
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
@@ -395,18 +400,18 @@ class ComposerParamTransformer(
                         propertySymbol.owner.getter = fn
                     }
                     if (propertySymbol.owner.setter == this) {
-                        propertySymbol.owner.setter = this
+                        propertySymbol.owner.setter = fn
                     }
                 }
             }
             fn.parent = parent
-            fn.typeParameters = this.typeParameters.map {
-                it.parent = fn
-                it
-            }
+            fn.copyTypeParametersFrom(this)
+
+            fn.returnType = returnType.remapTypeParameters(this, fn)
+
             fn.dispatchReceiverParameter = dispatchReceiverParameter?.copyTo(fn)
             fn.extensionReceiverParameter = extensionReceiverParameter?.copyTo(fn)
-            fn.valueParameters = valueParameters.map { p ->
+            fn.valueParameters = valueParameters.map { param ->
                 // Composable lambdas will always have `IrGet`s of all of their parameters
                 // generated, since they are passed into the restart lambda. This causes an
                 // interesting corner case with "anonymous parameters" of composable functions.
@@ -415,11 +420,17 @@ class ComposerParamTransformer(
                 // case in composable lambdas. The synthetic name that kotlin generates for
                 // anonymous parameters has an issue where it is not safe to dex, so we sanitize
                 // the names here to ensure that dex is always safe.
-                p.copyTo(fn, name = dexSafeName(p.name))
+                val newType = defaultParameterType(param).remapTypeParameters(this, fn)
+                param.copyTo(
+                    fn,
+                    name = dexSafeName(param.name),
+                    type = newType,
+                    isAssignable = param.defaultValue != null
+                )
             }
-            fn.annotations = annotations.map { a -> a }
+            fn.annotations = annotations.toList()
             fn.metadata = metadata
-            fn.body = body
+            fn.body = moveBodyTo(fn)?.copyWithNewTypeParams(this, fn)
         }
     }
 
@@ -503,11 +514,6 @@ class ComposerParamTransformer(
                 val name = JvmAbi.setterName(descriptor.correspondingProperty.name.identifier)
                 fn.annotations += jvmNameAnnotation(name)
                 fn.correspondingPropertySymbol?.owner?.setter = fn
-            }
-
-            fn.valueParameters = fn.valueParameters.map { param ->
-                val newType = defaultParameterType(param)
-                param.copyTo(fn, type = newType, isAssignable = param.defaultValue != null)
             }
 
             val valueParametersMapping = explicitParameters
